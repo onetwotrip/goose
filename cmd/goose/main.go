@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/spf13/viper"
+
 	"github.com/pressly/goose"
 
 	// Init DB drivers.
@@ -15,9 +17,19 @@ import (
 	_ "github.com/ziutek/mymysql/godrv"
 )
 
+type config struct {
+	Driver string
+	URL    string
+}
+
 var (
-	flags = flag.NewFlagSet("goose", flag.ExitOnError)
-	dir   = flags.String("dir", ".", "directory with migration files")
+	flags           = flag.NewFlagSet("goose", flag.ExitOnError)
+	dir             = flags.String("dir", ".", "directory with migration files")
+	configPath      = flags.String("config", ".", "directory with configuration file")
+	configName      = flags.String("config-name", "dbconf", "name (without extension) for configuration file")
+	environmentName = flags.String("env", "default", "environment name")
+
+	configurations map[string]config
 )
 
 func main() {
@@ -33,7 +45,18 @@ func main() {
 		return
 	}
 
-	if len(args) < 3 {
+	// Panov, read configuration
+	var driver, dbstring, command string
+	driver, dbstring = loadConfig()
+	needParams := 3
+	if driver != "" {
+		needParams--
+	}
+	if dbstring != "" {
+		needParams--
+	}
+
+	if len(args) < needParams {
 		flags.Usage()
 		return
 	}
@@ -43,7 +66,16 @@ func main() {
 		return
 	}
 
-	driver, dbstring, command := args[0], args[1], args[2]
+	if driver == "" {
+		driver = args[0]
+	}
+	if dbstring == "" && driver == "" {
+		dbstring = args[1]
+	} else if dbstring == "" {
+		dbstring = args[0]
+	}
+	command = args[needParams-1]
+	log.Printf("Use driver: %s, DSN: %s, command: %s", driver, dbstring, command)	
 
 	switch driver {
 	case "postgres", "mysql", "sqlite3", "redshift":
@@ -121,3 +153,29 @@ Commands:
     create NAME [sql|go] Creates new migration file with next version
 `
 )
+
+func loadConfig() (driver, dsn string) {
+	var err error
+	configurations = make(map[string]config)
+	viper.SetConfigName(*configName)
+	viper.AddConfigPath(*configPath)
+	if err = viper.ReadInConfig(); err != nil {
+		return
+	}
+
+	var (
+		defaultSection *viper.Viper
+		envSection     *viper.Viper
+	)
+
+	defaultSection = viper.Sub("default")
+	if envSection = viper.Sub(*environmentName); envSection == nil {
+		log.Fatalf("Unable to read section with name %s", *environmentName)
+	}
+
+	if driver = envSection.GetString("driver"); driver == "" && defaultSection != nil && *environmentName != "default" {
+		driver = defaultSection.GetString("driver")
+	}
+	dsn = envSection.GetString("url")
+	return
+}
