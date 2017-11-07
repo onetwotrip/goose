@@ -75,7 +75,7 @@ func main() {
 		dbstring = args[0]
 	}
 	command = args[needParams-1]
-	log.Printf("Use driver: %s, DSN: %s, command: %s", driver, dbstring, command)	
+	log.Printf("Use driver: %s, DSN: ***, command: %s", driver, command)
 
 	switch driver {
 	case "postgres", "mysql", "sqlite3", "redshift":
