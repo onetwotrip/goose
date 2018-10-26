@@ -6,8 +6,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"text/template"
+	"time"
 )
+
+const versionFormatDate = "20060102150405"
 
 // Create writes a new blank migration file.
 func Create(db *sql.DB, dir, name, migrationType string) error {
@@ -20,7 +24,7 @@ func Create(db *sql.DB, dir, name, migrationType string) error {
 	version := "00001"
 
 	if last, err := migrations.Last(); err == nil {
-		version = fmt.Sprintf("%05v", last.Version+1)
+		version = nextVersion(last.Version)
 	}
 
 	filename := fmt.Sprintf("%v_%v.%v", version, name, migrationType)
@@ -38,6 +42,14 @@ func Create(db *sql.DB, dir, name, migrationType string) error {
 
 	log.Printf("Created new file: %s\n", path)
 	return nil
+}
+
+func nextVersion(last int64) string {
+	if _, err := time.Parse(versionFormatDate, strconv.FormatInt(last, 10)); err == nil {
+		return time.Now().Format(versionFormatDate)
+	}
+
+	return fmt.Sprintf("%05v", last+1)
 }
 
 func writeTemplateToFile(path string, t *template.Template, version string) (string, error) {
